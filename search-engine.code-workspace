@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "audio-exctraction"
+		},
+		{
+			"path": "embedding-generation"
+		},
+		{
+			"path": "gateway"
+		},
+		{
+			"path": "transcription"
+		},
+		{
+			"path": "gpt-service"
+		}
+	],
+	"settings": {}
+}
