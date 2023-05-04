@@ -7,4 +7,4 @@ audio-exctraction/.env
 gateway/.env
 transcription/.env
 gpt-service/.env
-transcription/whisper-repo/
+transcription/whisper-repo
