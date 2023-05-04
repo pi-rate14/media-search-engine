@@ -1,0 +1,10 @@
+.DS_Store
+audio-exctraction/cache/*
+transcription/cache/*
+embedding-generation/embeddings/*
+embedding-generation/cache/*
+audio-exctraction/.env
+gateway/.env
+transcription/.env
+gpt-service/.env
+transcription/whisper-repo/
