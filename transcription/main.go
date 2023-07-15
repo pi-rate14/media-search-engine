@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/joho/godotenv"
@@ -15,10 +14,6 @@ type app struct {
 }
 
 func NewConfig() *app {
-	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForLocal       // Wait for all in-sync replicas to acknowledge
-	config.Producer.Compression = sarama.CompressionSnappy   // Use snappy compression
-	config.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
 
 	err := godotenv.Load(".env")
 	awsHandler, err := NewAWS(
@@ -26,14 +21,12 @@ func NewConfig() *app {
 		os.Getenv("AWS_ACCESS_KEY_ID"),
 		os.Getenv("AWS_SECRET_ACCESS_KEY"),
 	)
-
-	// Set up a Kafka producer using the configuration
-	producer, err := sarama.NewAsyncProducer([]string{"localhost:9092"}, config)
+	kf, err := NewKafkaProducer()
 	if err != nil {
 		panic(err)
 	}
 	return &app{
-		producer:   producer,
+		producer:   kf.producer,
 		awsHandler: awsHandler,
 	}
 }

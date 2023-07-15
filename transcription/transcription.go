@@ -15,7 +15,7 @@ import (
 func (app *app) listenForJobs() error {
 	fmt.Println("Listening for jobs...")
 	// Create a Kafka consumer
-	consumer, err := sarama.NewConsumer([]string{"localhost:9092"}, nil)
+	consumer, err := sarama.NewConsumer([]string{"broker:29092"}, nil)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (app *app) handleProcessing(uuid string) error {
 
 	log.Println("transcribing audio...")
 	// pass flags and parameters to the executable
-	cmd := exec.Command(execPath, "-m", "models/ggml-medium.en.bin", "-f", fmt.Sprintf("../cache/%s.wav", uuid), "-t", "8", "-ml", "125", "-pp", "true")
+	cmd := exec.Command(execPath, "-m", "models/ggml-base.en.bin", "-f", fmt.Sprintf("../cache/%s.wav", uuid), "-t", "8", "-ml", "125", "-pp", "true")
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -104,6 +104,8 @@ func (app *app) handleProcessing(uuid string) error {
 	}
 	fmt.Println(message)
 	app.producer.Input() <- message
+
+	clearCache(uuid, "")
 
 	log.Println("EMBEDDING_JOB created.")
 	return nil

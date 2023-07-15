@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -50,5 +51,18 @@ func SaveToCSV(data []string, outputFile string) error {
 		}
 	}
 	writer.Flush()
+	return nil
+}
+
+func clearCache(uuid, inputFileName string) error {
+
+	err := os.Remove(fmt.Sprintf("cache/%s.csv", uuid))
+	if err != nil {
+		return fmt.Errorf("couldn't clear cache: %v", err)
+	}
+	err = os.Remove(fmt.Sprintf("cache/%s.wav", uuid))
+	if err != nil {
+		return fmt.Errorf("couldn't clear cache: %v", err)
+	}
 	return nil
 }

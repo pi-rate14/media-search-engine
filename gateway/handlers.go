@@ -8,13 +8,21 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Shopify/sarama"
+	"github.com/kkdai/youtube/v2"
 	"github.com/redis/go-redis/v9"
 )
 
+type jobResponse struct {
+	PollUrl string `json:"poll_url"`
+	UUID    string `json:"uuid"`
+}
+
 func (app *app) handleVideoUpload(w http.ResponseWriter, r *http.Request) {
+	setupCorsResponse(&w, r)
 	// Parse multipart form data from the request
 	err := r.ParseMultipartForm(32 << 20) // max file size of 32MB
 	if err != nil {
@@ -46,7 +54,7 @@ func (app *app) handleVideoUpload(w http.ResponseWriter, r *http.Request) {
 	log.Printf("MIME: %#v\n", http.DetectContentType(fileHeader))
 
 	fileName := strings.ReplaceAll(multipartFileHeader.Filename, "-_-", "")
-	filepath, err := app.awsHandler.UploadVideoFile(&file, fileName)
+	filepath, err := app.awsHandler.UploadVideoFile(file, fileName)
 	if err != nil {
 		http.Error(w, "Failed to upload file to S3", http.StatusBadRequest)
 		return
@@ -87,10 +95,25 @@ func (app *app) handleVideoUpload(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("SET VALUE FOR %s: %s\n", uuid, "1")
 
 	// Send a response back to the client
-	w.Write([]byte(fmt.Sprintf("job queued with UUID: %s and filename %s/%s\n", uuid, folder, fileName)))
+	var resp jobResponse
+	resp.PollUrl = fmt.Sprintf("http://localhost:8085/status?job_id=%s", uuid)
+	resp.UUID = uuid
+	w.WriteHeader(http.StatusCreated)
+	respJson, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, "Failed to upload file to S3", http.StatusBadRequest)
+		return
+	}
+	w.Write(respJson)
+}
+
+type statusResponse struct {
+	UUID   string `json:"uuid"`
+	Status string `json:"status"`
 }
 
 func (app *app) jobStatus(w http.ResponseWriter, r *http.Request) {
+	setupCorsResponse(&w, r)
 	ctx := context.Background()
 	query := r.URL.Query()
 	jobID := query.Get("job_id") //filters="color"
@@ -108,15 +131,39 @@ func (app *app) jobStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var s statusResponse
+	s.UUID = jobID
+
 	fmt.Printf("GOT VALUE FOR %s: %s\n", jobID, val)
 
 	switch val {
 	case "0":
-		w.Write([]byte(fmt.Sprintf("job with UUID: %s\nSTATUS: FAILED", jobID)))
+		s.Status = "FAILED"
+		jsonR, err := json.Marshal(s)
+		if err != nil {
+			http.Error(w, "Failed to serve request because of redis error", http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
+		w.Write(jsonR)
 	case "1":
-		w.Write([]byte(fmt.Sprintf("job with UUID: %s\nSTATUS: PENDING", jobID)))
+		s.Status = "PENDING"
+		jsonR, err := json.Marshal(s)
+		if err != nil {
+			http.Error(w, "Failed to serve request because of redis error", http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
+		w.Write(jsonR)
 	case "2":
-		w.Write([]byte(fmt.Sprintf("job with UUID: %s\nSTATUS: COMPLETED", jobID)))
+		s.Status = "COMPLETED"
+		jsonR, err := json.Marshal(s)
+		if err != nil {
+			http.Error(w, "Failed to serve request because of redis error", http.StatusInternalServerError)
+			log.Println(err)
+			return
+		}
+		w.Write(jsonR)
 	}
 }
 
@@ -130,6 +177,7 @@ type QueryResponse struct {
 }
 
 func (app *app) serveQuery(w http.ResponseWriter, r *http.Request) {
+	setupCorsResponse(&w, r)
 	var q Query
 	ctx := context.Background()
 
@@ -157,7 +205,7 @@ func (app *app) serveQuery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cant marshal body", http.StatusInternalServerError)
 	}
 
-	resp, err := http.Post("http://localhost:8086/query", "application/json",
+	resp, err := http.Post("http://gpt-service:8086/query", "application/json",
 		bytes.NewBuffer(queryJson),
 	)
 
@@ -165,26 +213,29 @@ func (app *app) serveQuery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cant get response from GPT", http.StatusInternalServerError)
 	}
 
-	var gptRes string
+	var gptRes QueryResponse
 	err = json.NewDecoder(resp.Body).Decode(&gptRes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// jData, err := json.Marshal(gptRes.Data)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusBadRequest)
-	// 	return
-	// }
-	// w.Header().Set("Content-Type", "application/json")
-	// w.Write(jData)
-	w.Write([]byte(gptRes))
+	jsonResponse, err := json.Marshal(gptRes)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+
+	// Write the JSON response to the HTTP client
+	w.Write(jsonResponse) // jData, err := json.Marshal(gptRes.Data)
 }
 
 func (app *app) listenForJobs() error {
 	fmt.Println("Listening for jobs...")
 	// Create a Kafka consumer
-	consumer, err := sarama.NewConsumer([]string{"localhost:9092"}, nil)
+	consumer, err := sarama.NewConsumer([]string{"broker:29092"}, nil)
 	if err != nil {
 		return err
 	}
@@ -216,4 +267,104 @@ func (app *app) listenForJobs() error {
 			panic(err)
 		}
 	}
+}
+
+type youtubeLinkRequest struct {
+	Link string `json:"link"`
+}
+
+func (app *app) handleYoutubeLink(w http.ResponseWriter, r *http.Request) {
+	setupCorsResponse(&w, r)
+	var q youtubeLinkRequest
+
+	err := json.NewDecoder(r.Body).Decode(&q)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	client := youtube.Client{}
+
+	parsedURL, err := url.Parse(q.Link)
+	if err != nil {
+		fmt.Printf("Error parsing URL: %s\n", err)
+		return
+	}
+
+	// Get the value of the "v" query parameter
+	videoID := parsedURL.Query().Get("v")
+	if videoID == "" {
+		fmt.Println("No 'v' query parameter found in the URL")
+		return
+	}
+
+	fmt.Println(videoID)
+
+	video, err := client.GetVideo(videoID)
+	if err != nil {
+		panic(err)
+	}
+
+	formats := video.Formats.WithAudioChannels() // only get videos with audio
+	stream, _, err := client.GetStream(video, &formats[0])
+	if err != nil {
+		panic(err)
+	}
+	filepath, err := app.awsHandler.UploadVideoFile(stream, videoID)
+	if err != nil {
+		http.Error(w, "Failed to upload file to S3", http.StatusBadRequest)
+		return
+	}
+
+	tokens := strings.Split(filepath, "-_-")
+	uploadedFileName := tokens[1]
+	fmt.Printf("uploaded file name: %s", uploadedFileName)
+	folder := strings.Split(tokens[0], "/")[0]
+	fmt.Printf("uploaded folder name: %s", folder)
+
+	uuid := strings.Split(tokens[0], "/")[1]
+	fmt.Printf("uploaded uuid name: %s", uuid)
+
+	message := &sarama.ProducerMessage{
+		Topic: "JOBS",
+		Value: sarama.ByteEncoder(uuid),
+		Headers: []sarama.RecordHeader{
+			{
+				Key:   []byte("filename"),
+				Value: []byte(uploadedFileName),
+			},
+			{
+				Key:   []byte("folder"),
+				Value: []byte(folder),
+			},
+		},
+	}
+	fmt.Println(message)
+	app.producer.Input() <- message
+
+	ctx := context.Background()
+
+	err = app.redis.Set(ctx, uuid, "1", 0).Err()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("SET VALUE FOR %s: %s\n", uuid, "1")
+
+	// Send a response back to the client
+	var resp jobResponse
+	resp.PollUrl = fmt.Sprintf("http://localhost:8085/status?job_id=%s", uuid)
+	resp.UUID = uuid
+	w.WriteHeader(http.StatusCreated)
+	respJson, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, "Failed to upload file to S3", http.StatusBadRequest)
+		return
+	}
+	w.Write(respJson)
+
+}
+
+func setupCorsResponse(w *http.ResponseWriter, req *http.Request) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Authorization")
 }

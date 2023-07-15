@@ -1,0 +1,108 @@
+version: '3'
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "8085:8085"
+    volumes:
+      - ".:/gateway/app"
+    depends_on:
+      init-kafka:
+          condition: service_completed_successfully
+    
+  audio-extraction:
+    build: ./audio-extraction
+    volumes:
+      - ".:/audio-extraction/app"
+    depends_on:
+      init-kafka:
+          condition: service_completed_successfully
+
+  transcription:
+    build: ./transcription
+    volumes:
+      - ".:/transcription/app"
+    depends_on:
+      init-kafka:
+          condition: service_completed_successfully
+
+  # client:
+  #   build: ./client
+  #   volumes:
+  #     - ".:/client/app"
+  #   ports:
+  #     - "3000:3000"
+      
+  gpt-service:
+    build: ./gpt-service
+    ports:
+      - "8086:8086"
+    volumes:
+      - ".:/gpt-service/app"
+    depends_on:
+      init-kafka:
+          condition: service_completed_successfully
+
+  embedding-generation:
+    build: ./embedding-generation
+    ports:
+      - "8090:8090"
+    volumes:
+      - ".:/embedding-generation/app"
+    depends_on:
+      init-kafka:
+          condition: service_completed_successfully
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  broker:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: broker
+    ports:
+      - "9092:9092"
+    expose:
+      - '29092'
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1  
+
+  redis:
+    image: 'bitnami/redis'
+    container_name: redis
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    expose:
+      - '6379'
+    ports:
+      - '6379:6379'
+      
+  init-kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    depends_on:
+      - broker
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      # blocks until kafka is reachable
+      kafka-topics --bootstrap-server broker:29092 --list
+
+      echo -e 'Creating kafka topics'
+      kafka-topics --bootstrap-server broker:29092 --create --if-not-exists --topic JOBS --replication-factor 1 --partitions 1
+      kafka-topics --bootstrap-server broker:29092 --create --if-not-exists --topic FINISHED_JOBS --replication-factor 1 --partitions 1
+      kafka-topics --bootstrap-server broker:29092 --create --if-not-exists --topic TRANSCRIPTION_JOBS --replication-factor 1 --partitions 1
+      kafka-topics --bootstrap-server broker:29092 --create --if-not-exists --topic EMBEDDING_JOBS --replication-factor 1 --partitions 1
+
+      echo -e 'Successfully created the following topics:'
+      kafka-topics --bootstrap-server broker:29092 --list
+      "

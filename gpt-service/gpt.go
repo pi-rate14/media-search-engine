@@ -41,7 +41,9 @@ func NewGPT(key string) *GPT {
 }
 
 func (gpt *GPT) buildPrompt(query, context string) string {
-	return fmt.Sprintf("Answer the question in detail with the help of the given context.\nQuestion: %s\nContext:%s", query, context)
+	return fmt.Sprintf(
+		"You are an expert question answerer. I have a video's transcript and a question about the video. I will give you the question and the relevant context from the transcript. Your job is to answer the question in detail with the help of the given context. \n Instruction: Make sure to return the answer in a HTML <div> tag that can be rendered in browser. You can also add other tags to make the answer better. For example, you can use the <b> tag to highlight important words or use the <li> tag to return the answer in points. Make sure to only return the container <div> and no other supporting text.\nQuestion: %s\nContext:%s",
+		query, context)
 }
 
 func (gpt *GPT) makeRequest(prompt string) ChatCompletionResponse {

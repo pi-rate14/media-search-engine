@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -38,7 +37,7 @@ func NewAWS(region, accessKeyID, secretAccessKey string) (*AWS, error) {
 	}, nil
 }
 
-func (awsHandler *AWS) UploadVideoFile(file *multipart.File, fileName string) (string, error) {
+func (awsHandler *AWS) UploadVideoFile(file io.Reader, fileName string) (string, error) {
 
 	uploader := s3manager.NewUploader(awsHandler.session)
 
@@ -52,7 +51,7 @@ func (awsHandler *AWS) UploadVideoFile(file *multipart.File, fileName string) (s
 
 	// Create a buffer to read the file into
 	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, *file)
+	_, err = io.Copy(buf, file)
 	if err != nil {
 		return "", err
 	}

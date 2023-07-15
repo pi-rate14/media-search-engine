@@ -104,7 +104,7 @@ def order_document_sections_by_query_similarity(query, hits, df):
 
 def construct_context(question: str, context_embeddings: dict, df: pd.DataFrame):
     MAX_SECTION_LEN = 250
-    SEPARATOR = ""
+    SEPARATOR = "###"
     """
     Fetch relevant documents and concatenate them together to create a context
     """
@@ -119,7 +119,6 @@ def construct_context(question: str, context_embeddings: dict, df: pd.DataFrame)
         section_index = each['corpus_id']      
         document_section = df.loc[section_index]
         chosen_sections_len += document_section.tokens
-        # print(chosen_sections_len)
         if chosen_sections_len > MAX_SECTION_LEN:
             break
             
@@ -130,5 +129,4 @@ def construct_context(question: str, context_embeddings: dict, df: pd.DataFrame)
     for i in range(len(chosen_sections)-1):
         final_context += chosen_sections[i]
     return final_context
-    # return final_context
 

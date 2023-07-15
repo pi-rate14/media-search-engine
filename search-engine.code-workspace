@@ -1,19 +1,31 @@
 {
 	"folders": [
 		{
-			"path": "audio-exctraction"
+			"name": "audio-extraction",
+			"path": "audio-extraction"
 		},
 		{
+			"name": "embedding-generation",
 			"path": "embedding-generation"
 		},
 		{
+			"name": "gateway",
 			"path": "gateway"
 		},
 		{
+			"name": "transcription",
 			"path": "transcription"
 		},
 		{
+			"name": "gpt-service",
 			"path": "gpt-service"
+		},
+		{
+			"name": "media-search-engine",
+			"path": "."
+		},
+		{
+			"path": "client"
 		}
 	],
 	"settings": {}

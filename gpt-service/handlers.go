@@ -38,7 +38,7 @@ func (app *app) QueryGPT(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "cant marshal body", http.StatusInternalServerError)
 	}
 
-	resp, err := http.Post("http://localhost:8090/context", "application/json",
+	resp, err := http.Post("http://embedding-generation:8090/context", "application/json",
 		bytes.NewBuffer(queryJson),
 	)
 
@@ -59,14 +59,20 @@ func (app *app) QueryGPT(w http.ResponseWriter, r *http.Request) {
 	gptResponse := app.gpt.makeRequest(app.gpt.buildPrompt(q.QueryString, c.Context))
 	var response QueryResponse
 	response.Data = gptResponse.Choices[0].Message.Content
-	fmt.Println(gptResponse.Choices[0].Message.Content)
-	jData, err := json.Marshal(response.Data)
+	// fmt.Println(gptResponse.Choices[0].Message.Content)
+	// Convert the response variable to a JSON-encoded byte array
+	// var response QueryResponse
+	// response.Data = c.Context
+	jsonResponse, err := json.Marshal(response)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(jData)
 
-	// w.Write([]byte(gptResponse.Choices[0].Message.Content))
+	// Set the Content-Type header to application/json
+	w.Header().Set("Content-Type", "application/json")
+
+	// Write the JSON response to the HTTP client
+	w.Write(jsonResponse)
+
 }

@@ -12,16 +12,14 @@ from threading import Thread
 # Initialize Flask application
 app = Flask(__name__)
 load_dotenv()
-consumer = KafkaConsumer('EMBEDDING_JOBS', bootstrap_servers=['localhost:9092'])
-producer = KafkaProducer(bootstrap_servers=['localhost:9092'], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+consumer = KafkaConsumer('EMBEDDING_JOBS', bootstrap_servers=['broker:29092'])
+producer = KafkaProducer(bootstrap_servers=['broker:29092'], value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 
 # Load the data
 # print("loading dataframe...")
 # app.df = process_data("output.csv")
 # print("loading embeddings...")
 # app.embeddings = load_embeddings("embeddings.pkl", "output.csv")
-
-from flask import current_app
 
 # enable cors
 cors = CORS(app)

@@ -3,11 +3,12 @@ package main
 import (
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 )
 
 type app struct {
@@ -18,10 +19,6 @@ type app struct {
 }
 
 func NewConfig() *app {
-	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForLocal       // Wait for all in-sync replicas to acknowledge
-	config.Producer.Compression = sarama.CompressionSnappy   // Use snappy compression
-	config.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
 
 	err := godotenv.Load(".env")
 	awsHandler, err := NewAWS(
@@ -31,18 +28,18 @@ func NewConfig() *app {
 	)
 
 	client := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     "redis:6379",
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
 
 	// Set up a Kafka producer using the configuration
-	producer, err := sarama.NewAsyncProducer([]string{"localhost:9092"}, config)
+	kf, err := NewKafkaProducer()
 	if err != nil {
 		panic(err)
 	}
 	return &app{
-		producer:   producer,
+		producer:   kf.producer,
 		redis:      client,
 		awsHandler: awsHandler,
 	}
@@ -51,10 +48,13 @@ func NewConfig() *app {
 func main() {
 	app := NewConfig()
 	go app.listenForJobs()
-	http.HandleFunc("/create", app.handleVideoUpload)
-	http.HandleFunc("/status", app.jobStatus)
-	http.HandleFunc("/query", app.serveQuery)
-	err := http.ListenAndServe(":8085", nil)
+	router := mux.NewRouter()
+	router.HandleFunc("/create", app.handleVideoUpload)
+	router.HandleFunc("/createFromLink", app.handleYoutubeLink)
+	router.HandleFunc("/status", app.jobStatus)
+	router.HandleFunc("/query", app.serveQuery)
+	corsHandler := cors.Default().Handler(router)
+	err := http.ListenAndServe(":8085", corsHandler)
 	if err != nil {
 		panic(err)
 	}
