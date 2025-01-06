@@ -16,5 +16,5 @@ Ask questions from YouTube videos or your own videos in natural language.
 6. Navigate to http://localhost:3000 to test the application
 
 #### Find a demo here: https://twitter.com/3__14rate/status/1680162060813082633?s=20
-#### Article explaining the project: 
+#### Article explaining the project: https://apoorvaencoder.myportfolio.com/abstractive-question-answering-over-video
 
